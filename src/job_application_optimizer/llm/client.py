@@ -51,21 +51,21 @@ class LLMRouter:
 
     @classmethod
     def from_env(cls) -> "LLMRouter":
-        default_api_key = _read_env("LLM_API_KEY", "OPENAI_API_KEY")
+        default_api_key = _read_env("LLM_API_KEY")
         if not default_api_key:
-            raise RuntimeError("LLM generation is required. Set OPENAI_API_KEY or LLM_API_KEY before running this script.")
+            raise RuntimeError("LLM generation is required. Set LLM_API_KEY before running this script.")
 
-        default_model = _read_env("LLM_MODEL", "OPENAI_MODEL") or "gpt-4o-mini"
-        default_base_url = _read_env("LLM_BASE_URL", "OPENAI_BASE_URL") or None
-        default_api_mode = (_read_env("LLM_API_MODE", "OPENAI_API_MODE") or "responses").lower()
+        default_model = _read_env("LLM_MODEL") or "gpt-4o-mini"
+        default_base_url = _read_env("LLM_BASE_URL") or None
+        default_api_mode = (_read_env("LLM_API_MODE") or "responses").lower()
 
         endpoints: dict[ModelRole, LLMEndpoint] = {}
         for role in ModelRole:
             prefix = _role_prefix(role)
-            model = _read_env(f"LLM_{prefix}_MODEL", f"OPENAI_{prefix}_MODEL") or default_model
-            api_key = _read_env(f"LLM_{prefix}_API_KEY", f"OPENAI_{prefix}_API_KEY") or default_api_key
-            base_url = _read_env(f"LLM_{prefix}_BASE_URL", f"OPENAI_{prefix}_BASE_URL") or default_base_url
-            api_mode = (_read_env(f"LLM_{prefix}_API_MODE", f"OPENAI_{prefix}_API_MODE") or default_api_mode).lower()
+            model = _read_env(f"LLM_{prefix}_MODEL") or default_model
+            api_key = _read_env(f"LLM_{prefix}_API_KEY") or default_api_key
+            base_url = _read_env(f"LLM_{prefix}_BASE_URL") or default_base_url
+            api_mode = (_read_env(f"LLM_{prefix}_API_MODE") or default_api_mode).lower()
             endpoints[role] = LLMEndpoint(model=model, api_key=api_key, base_url=base_url, api_mode=api_mode)
 
         return cls(endpoints)
@@ -93,44 +93,8 @@ class LLMRouter:
         return content
 
 
-def maybe_get_openai_client() -> OpenAI | None:
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    if not api_key:
-        return None
-
-    base_url = os.getenv("OPENAI_BASE_URL", "").strip() or None
-    return OpenAI(api_key=api_key, base_url=base_url)
-
-
-def require_openai_client() -> OpenAI:
-    client = maybe_get_openai_client()
-    if client is None:
-        raise RuntimeError("LLM generation is required. Set OPENAI_API_KEY before running this script.")
-    return client
-
-
 def require_llm_router() -> LLMRouter:
     return LLMRouter.from_env()
-
-
-def llm_generate(
-    client: OpenAI,
-    model: str,
-    prompt: str,
-    temperature: float = 0.2,
-) -> str:
-    system_instruction = (
-        "You are a precise career assistant. Never fabricate experience. "
-        "Optimize wording only based on provided resume facts. "
-        "Avoid generic claims like 'strong fit', 'great fit', 'perfect fit', or 'ideal candidate'. "
-        "Show fit through concrete, resume-backed evidence and distinctive strengths."
-    )
-    combined_input = f"{system_instruction}\n\n{prompt}"
-    response = client.responses.create(
-        model=model,
-        input=combined_input,
-    )
-    return (response.output_text or "").strip()
 
 
 def endpoint_generate(
@@ -165,23 +129,6 @@ def endpoint_generate(
     return (response.output_text or "").strip()
 
 
-def safe_llm_generate(
-    client: OpenAI | None,
-    model: str,
-    prompt: str,
-    temperature: float = 0.2,
-) -> str | None:
-    if client is None:
-        return None
-
-    try:
-        return llm_generate(client, model, prompt, temperature=temperature)
-    except APIConnectionError:
-        return None
-    except Exception:
-        return None
-
-
 def safe_endpoint_generate(
     endpoint: LLMEndpoint,
     prompt: str,
@@ -196,29 +143,11 @@ def safe_endpoint_generate(
         return None
 
 
-def require_llm_generate(
-    client: OpenAI,
-    model: str,
-    prompt: str,
-    artifact_name: str,
-    temperature: float = 0.2,
-) -> str:
-    content = safe_llm_generate(client, model, prompt, temperature=temperature)
-    if content is None or not content.strip():
-        raise RuntimeError(f"LLM generation failed for {artifact_name}. Check API connectivity and model settings.")
-    return content
-
-
 __all__ = [
     "LLMEndpoint",
     "LLMRouter",
     "ModelRole",
     "endpoint_generate",
-    "llm_generate",
-    "maybe_get_openai_client",
     "require_llm_router",
-    "require_llm_generate",
-    "require_openai_client",
     "safe_endpoint_generate",
-    "safe_llm_generate",
 ]
