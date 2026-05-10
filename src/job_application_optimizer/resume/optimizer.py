@@ -33,13 +33,6 @@ def _rewrite_lift_threshold() -> float:
         return 3.0
 
 
-def _acceptable_factual_risk_count() -> int:
-    try:
-        return max(int(os.getenv("ACCEPTABLE_FACTUAL_RISK_COUNT", "0")), 0)
-    except (TypeError, ValueError):
-        return 0
-
-
 def _version_label(index: int) -> str:
     return f"version{index}"
 
@@ -463,18 +456,12 @@ def optimize_resume_content(
         }
     ]
     generated_score = _analysis_score(optimized_analysis)
-    original_risk_count = _factual_risk_count(baseline_analysis)
-    generated_risk_count = _factual_risk_count(optimized_analysis)
-    acceptable_risk_count = _acceptable_factual_risk_count()
     baseline_readability = float((baseline_analysis.get("category_scores", {}) or {}).get("ats_readability", 0) or 0)
     generated_readability = float((optimized_analysis.get("category_scores", {}) or {}).get("ats_readability", 0) or 0)
     readability_not_worse = generated_readability >= baseline_readability
-    factual_risk_acceptable = generated_risk_count <= acceptable_risk_count and generated_risk_count <= original_risk_count
-    if generated_score <= original_score or not factual_risk_acceptable or not readability_not_worse:
+    if generated_score <= original_score or not readability_not_worse:
         if generated_score <= original_score:
             optimized_analysis["stop_reason"] = "rejected_no_score_improvement"
-        elif not factual_risk_acceptable:
-            optimized_analysis["stop_reason"] = "rejected_factual_risk_increase"
         else:
             optimized_analysis["stop_reason"] = "rejected_readability_regression"
         generation_mode = "original-kept"
@@ -533,17 +520,11 @@ def optimize_resume_content(
         retries += 1
         current_score = _analysis_score(optimized_analysis)
         score_delta = round(current_score - previous_score, 2)
-        current_risk_count = _factual_risk_count(optimized_analysis)
-        previous_risk_count = _factual_risk_count(previous_analysis)
-        acceptable_risk_count = _acceptable_factual_risk_count()
         previous_readability = float((previous_analysis.get("category_scores", {}) or {}).get("ats_readability", 0) or 0)
         current_readability = float((optimized_analysis.get("category_scores", {}) or {}).get("ats_readability", 0) or 0)
-        factual_risk_acceptable = current_risk_count <= acceptable_risk_count and current_risk_count <= previous_risk_count
-        accepted_edit = current_score > previous_score and factual_risk_acceptable and current_readability >= previous_readability
+        accepted_edit = current_score > previous_score and current_readability >= previous_readability
         if current_score <= previous_score:
             rejection_reason = "rejected_no_score_improvement"
-        elif not factual_risk_acceptable:
-            rejection_reason = "rejected_factual_risk_increase"
         elif current_readability < previous_readability:
             rejection_reason = "rejected_readability_regression"
         else:

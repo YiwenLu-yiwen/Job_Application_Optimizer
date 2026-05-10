@@ -158,7 +158,7 @@ def has_factual_risk(analysis: dict[str, Any]) -> bool:
 
 
 def ats_stop_condition_met(analysis: dict[str, Any], target_score: float) -> bool:
-    return float(analysis.get("score", 0) or 0) >= target_score and not has_factual_risk(analysis)
+    return float(analysis.get("score", 0) or 0) >= target_score
 
 
 __all__ = ["ats_stop_condition_met", "build_llm_ats_score_prompt", "has_factual_risk", "llm_ats_score"]

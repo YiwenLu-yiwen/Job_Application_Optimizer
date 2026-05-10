@@ -132,7 +132,6 @@ Environment variables (loaded from `.env`):
 - `JOB_FETCH_BROWSER_WAIT_MS` (optional, default `1500`; extra wait after page load for JS-rendered content)
 - `JOB_FETCH_BROWSER_HEADLESS` (optional, default `true`)
 - `REWRITE_LIFT_THRESHOLD` (optional, default `3`; minimum estimated score lift required before generating a tailored rewrite)
-- `ACCEPTABLE_FACTUAL_RISK_COUNT` (optional, default `0`; maximum factual-risk findings allowed in an accepted generated/edited resume)
 
 ## Job Fetching
 
@@ -166,7 +165,7 @@ Gap classes:
 - Adjacent only: can use transferable positioning, not direct claims.
 - Not supported: cannot add to the resume.
 
-Acceptance is strict: a generated or edited resume is accepted only if its score improves over the current accepted resume, factual risk is at or below `ACCEPTABLE_FACTUAL_RISK_COUNT`, factual risk does not increase, and ATS readability does not regress. Otherwise the previous version is kept.
+Acceptance is score-first: a generated or edited resume is accepted only if its score improves over the current accepted resume and ATS readability does not regress. Factual risks are still reported in the CSVs and edit log, but they are advisory signals rather than automatic rejection gates.
 
 ## Commands
 
