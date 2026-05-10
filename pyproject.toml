@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "job-application-optimizer"
+version = "0.1.0"
+description = "Truth-constrained LLM pipeline for job application resume optimization and ATS fit analysis."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Yiwen Lu" }]
+dependencies = [
+  "beautifulsoup4>=4.12.0",
+  "openai>=1.30.0",
+  "playwright>=1.43.0",
+  "pypdf>=4.2.0",
+  "python-docx>=1.1.0",
+  "python-dotenv>=1.0.1",
+  "requests>=2.31.0",
+  "trafilatura>=1.8.0",
+]
+
+
+[project.scripts]
+job-application-optimizer = "job_application_optimizer.cli:main"
+generate-cv-understanding = "job_application_optimizer.resume.understanding:main"
+generate-interview-prep = "job_application_optimizer.generation.interview_prep:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
