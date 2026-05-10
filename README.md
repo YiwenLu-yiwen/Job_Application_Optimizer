@@ -23,31 +23,11 @@ For each job URL from `urls.txt`, the pipeline will:
 
 The batch pipeline uses a CV-understanding cache (`cv_deep_understanding.md`) to improve wording refinement and JD-term replacement without fabricating experience.
 
-## Pipeline flow
+## Workflow Overflow
 
-```mermaid
-flowchart TD
-    A[urls.txt] --> B[Fetch job page]
-    B --> C[Extract clean JD text]
-    C --> D[LLM extracts company, role, location]
-    D --> E[Step 1: Extract job requirements from JD]
-    E --> F[Step 2: Map resume evidence to each requirement]
-    F --> G[Step 3: Generate tailored baseline resume]
-    G --> H[Step 4: Evaluator scores ATS + recruiter fit]
-    H --> I[Step 5: Evaluator identifies missing keywords, weak bullets, factual risks]
-    I --> J{Score >= target and no factual risk?}
-    J -- yes --> K[Write tailored_resume.md, cover_letter.md, CSV reports]
-    J -- no --> L[Step 6: Editor revises only weak sections/bullets]
-    L --> M[Step 7: Re-score edited resume]
-    M --> P{Score improved?}
-    P -- yes --> J
-    P -- no --> N[Reject edit and keep previous best]
-    J -. max 3 edits .-> N[Stop with best available version]
-    K --> O[Step 8: Update completed CSVs, batch_summary.json, ranked_jobs.csv]
-```
+![Overview of the Job Application Optimizer Workflow](<Overview of the Job Application Optimizer Workflow.png>)
 
-The first resume is a full baseline rewrite. After that, retries use **Evaluator + Editor separation**: the Evaluator scores and diagnoses only, while the Editor revises only the weak sections or bullets identified by the Evaluator. The loop stops when the score reaches `TARGET_RESUME_SCORE` and the Evaluator reports no factual risk, or after 3 local edit attempts.
-If the baseline rewrite does not improve over the original resume, the original resume is kept. If a local edit does not improve over the previous tailored version, the edited version is rejected, the previous higher-scoring resume is kept, and the loop stops.
+The original resume is scored first. A baseline rewrite is generated only when the evidence-backed rewrite opportunity clears the lift threshold. After that, retries use **Evaluator + Editor separation**: the Evaluator scores and diagnoses only, while the Editor revises only the weak sections or bullets identified by the Evaluator. If the baseline rewrite does not improve over the original resume, the original resume is kept. If a local edit does not improve over the previous accepted version, that edit is rejected and the loop stops immediately. If an edit improves the score without reducing ATS readability, it becomes the new best version; the loop continues only while the score is still below `TARGET_RESUME_SCORE` and edit attempts remain.
 
 ## Design principles
 
@@ -56,6 +36,7 @@ If the baseline rewrite does not improve over the original resume, the original 
 - **Evaluator/Editor separation**: the Evaluator diagnoses only; the Editor revises only the weak sections or weak bullets identified by the Evaluator.
 - **Local iteration after baseline**: the first tailored resume can be a full rewrite. Later attempts are local edits to the already-polished resume, not repeated full regeneration.
 - **Keep the best version**: if one optimization step does not improve the score, that new version is rejected, the previous higher-scoring resume is kept, and the pipeline stops.
+- **Advisory factual-risk reporting**: factual risks are surfaced in reports and editor instructions, but they are not automatic rejection gates.
 - **Human-readable reports**: large per-job analysis artifacts are written as CSV files instead of long JSON files.
 
 ## Inputs
