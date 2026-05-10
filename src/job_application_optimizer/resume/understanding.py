@@ -2,13 +2,13 @@
 
 import argparse
 import json
-import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 from docx import Document
-from openai import OpenAI
 from pypdf import PdfReader
+
+from job_application_optimizer.llm.client import LLMRouter, ModelRole, require_llm_router
 
 load_dotenv()
 
@@ -29,7 +29,7 @@ def read_resume(resume_path: Path) -> str:
         raise ValueError(f"Unsupported file type: {suffix}")
 
 
-def generate_cv_understanding(resume_text: str, client: OpenAI, model: str) -> str:
+def generate_cv_understanding(resume_text: str, llm: LLMRouter) -> str:
     """
     Generate deep CV understanding analysis using LLM.
     """
@@ -130,23 +130,21 @@ CRITICAL REQUIREMENTS:
         "Focus on what differentiates them, not generic strengths. Every statement must be specific and actionable."
     )
     
-    combined_input = f"{system_instruction}\n\n{prompt}"
-    
-    response = client.responses.create(
-        model=model,
-        input=combined_input,
+    return llm.generate(
+        ModelRole.CV,
+        f"{system_instruction}\n\n{prompt}",
+        "CV deep understanding",
+        temperature=0.2,
     )
-    
-    return (response.output_text or "").strip()
 
 
-def load_or_generate_cv_understanding(resume_path: Path, client: OpenAI, model: str, cache_path: Path) -> str:
+def load_or_generate_cv_understanding(resume_path: Path, llm: LLMRouter, cache_path: Path) -> str:
     cache_path = cache_path.resolve()
     if cache_path.exists():
         return cache_path.read_text(encoding="utf-8")
 
     resume_text = read_resume(resume_path)
-    analysis = generate_cv_understanding(resume_text, client, model)
+    analysis = generate_cv_understanding(resume_text, llm)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(analysis, encoding="utf-8")
     return analysis
@@ -171,13 +169,9 @@ def main():
     
     # Generate understanding
     print("\n🤖 Generating CV Deep Understanding using LLM...")
-    client = OpenAI(
-        api_key=os.getenv("OPENAI_API_KEY"),
-        base_url=os.getenv("OPENAI_BASE_URL")
-    )
-    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    
-    analysis = generate_cv_understanding(resume_text, client, model)
+    llm = require_llm_router()
+
+    analysis = generate_cv_understanding(resume_text, llm)
     
     # Save to file
     output_path = Path(args.output or "cv_deep_understanding.md")
@@ -216,4 +210,3 @@ __all__ = [
 
 if __name__ == "__main__":
     main()
-

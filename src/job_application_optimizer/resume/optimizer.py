@@ -6,11 +6,9 @@ import os
 import textwrap
 from typing import Any
 
-from openai import OpenAI
-
 from job_application_optimizer.config import _prompt_text
 from job_application_optimizer.generation.prompt_bundle import build_prompt_bundle
-from job_application_optimizer.llm.client import require_llm_generate
+from job_application_optimizer.llm.client import LLMRouter, ModelRole
 from job_application_optimizer.models import JobRecord
 from job_application_optimizer.scoring.ats import ats_stop_condition_met, llm_ats_score
 
@@ -399,8 +397,7 @@ def optimize_resume_content(
     cv_understanding: str,
     requirements: dict[str, Any],
     evidence_map: dict[str, Any],
-    client: OpenAI,
-    model: str,
+    llm: LLMRouter,
     target_score: float,
     max_retries: int = 3,
 ) -> tuple[str, dict[str, Any], str, list[dict[str, Any]], str, str]:
@@ -437,11 +434,10 @@ def optimize_resume_content(
         requirements=requirements,
         evidence_map=evidence_map,
     )
-    tailored_resume = require_llm_generate(client, model, prompts["resume"], "tailored resume")
+    tailored_resume = llm.generate(ModelRole.WRITER, prompts["resume"], "tailored resume")
 
     optimized_analysis = llm_ats_score(
-        client,
-        model,
+        llm,
         job,
         job_text,
         tailored_resume,
@@ -497,12 +493,11 @@ def optimize_resume_content(
             evidence_map,
             retries + 1,
         )
-        edited_resume = require_llm_generate(client, model, editor_prompt, "section editor retry")
+        edited_resume = llm.generate(ModelRole.WRITER, editor_prompt, "section editor retry")
 
         tailored_resume = edited_resume
         optimized_analysis = llm_ats_score(
-            client,
-            model,
+            llm,
             job,
             job_text,
             tailored_resume,

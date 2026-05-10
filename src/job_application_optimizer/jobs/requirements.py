@@ -3,10 +3,8 @@
 import textwrap
 from typing import Any
 
-from openai import OpenAI
-
 from job_application_optimizer.config import _prompt_text
-from job_application_optimizer.llm.client import require_llm_generate
+from job_application_optimizer.llm.client import LLMRouter, ModelRole
 from job_application_optimizer.llm.json_parser import parse_llm_json
 from job_application_optimizer.models import JobRecord
 
@@ -43,9 +41,9 @@ def build_requirement_extraction_prompt(job: JobRecord, job_text: str) -> str:
     ).strip()
 
 
-def llm_extract_job_requirements(client: OpenAI, model: str, job: JobRecord, job_text: str) -> dict[str, Any]:
+def llm_extract_job_requirements(llm: LLMRouter, job: JobRecord, job_text: str) -> dict[str, Any]:
     prompt = build_requirement_extraction_prompt(job, job_text)
-    payload = parse_llm_json(require_llm_generate(client, model, prompt, "job requirements", temperature=0.1))
+    payload = parse_llm_json(llm.generate(ModelRole.REASONING, prompt, "job requirements", temperature=0.1))
     requirements = payload.get("requirements")
     if not isinstance(requirements, list):
         payload["requirements"] = []

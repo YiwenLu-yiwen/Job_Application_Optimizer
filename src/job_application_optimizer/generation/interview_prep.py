@@ -7,7 +7,6 @@ score ATS fit, regenerate resumes, or rewrite cover letters.
 
 import argparse
 import csv
-import os
 import textwrap
 from datetime import datetime
 from pathlib import Path
@@ -16,7 +15,7 @@ from time import perf_counter
 from dotenv import load_dotenv
 
 from job_application_optimizer.config import _prompt_text
-from job_application_optimizer.llm.client import require_llm_generate, require_openai_client
+from job_application_optimizer.llm.client import LLMRouter, ModelRole, require_llm_router
 from job_application_optimizer.io.run_logger import log_event, setup_run_logger
 from job_application_optimizer.io.terminal import (
     format_duration,
@@ -122,7 +121,7 @@ def build_existing_folder_interview_prompt(
 def generate_interview_for_folder(
     job_folder: Path,
     cv_understanding_path: Path,
-    model: str,
+    llm: LLMRouter,
     overwrite: bool = False,
 ) -> Path:
     job_folder = job_folder.resolve()
@@ -146,8 +145,7 @@ def generate_interview_for_folder(
         tailored_resume=resume_path.read_text(encoding="utf-8"),
         cv_understanding=cv_understanding_path.read_text(encoding="utf-8"),
     )
-    client = require_openai_client()
-    interview_pack = require_llm_generate(client, model, prompt, "interview prep", temperature=0.3)
+    interview_pack = llm.generate(ModelRole.INTERVIEW, prompt, "interview prep", temperature=0.3)
     output_path.write_text(interview_pack, encoding="utf-8")
     return output_path
 
@@ -174,7 +172,7 @@ def main() -> None:
     parser.add_argument("--overwrite", action="store_true", help="Regenerate interview_prep.md even if it already exists")
     args = parser.parse_args()
 
-    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    llm = require_llm_router()
     cv_understanding_path = Path(args.cv_understanding).resolve()
 
     logger, log_path = setup_run_logger("interview_prep")
@@ -205,7 +203,7 @@ def main() -> None:
         output = generate_interview_for_folder(
             folder,
             cv_understanding_path=cv_understanding_path,
-            model=model,
+            llm=llm,
             overwrite=args.overwrite,
         )
         elapsed = perf_counter() - job_started_at
@@ -250,7 +248,7 @@ def main() -> None:
         generated_output = generate_interview_for_folder(
             folder,
             cv_understanding_path=cv_understanding_path,
-            model=model,
+            llm=llm,
             overwrite=args.overwrite,
         )
         generated.append(generated_output)

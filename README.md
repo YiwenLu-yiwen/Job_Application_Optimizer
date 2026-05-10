@@ -124,6 +124,14 @@ Environment variables (loaded from `.env`):
 - `OPENAI_API_KEY` (required)
 - `OPENAI_MODEL` (required)
 - `OPENAI_BASE_URL` (optional, for compatible gateways)
+- `LLM_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL` (optional provider-neutral aliases; they take precedence over the `OPENAI_*` defaults)
+- `LLM_API_MODE` (optional, default `responses`; use `chat` for OpenAI-compatible chat-completions endpoints such as many local/open model servers)
+- `LLM_REASONING_MODEL` (optional; overrides the model used for requirements extraction, evidence mapping, ATS scoring, and gap diagnosis)
+- `LLM_WRITER_MODEL` (optional; overrides the model used for resume, cover-letter, and local editor generation)
+- `LLM_INTERVIEW_MODEL` (optional; overrides the model used for interview-prep generation)
+- `LLM_CV_MODEL` (optional; overrides the model used for CV deep-understanding generation)
+- `LLM_METADATA_MODEL` (optional; overrides the model used for job metadata extraction)
+- `LLM_<ROLE>_BASE_URL`, `LLM_<ROLE>_API_KEY`, `LLM_<ROLE>_API_MODE` (optional; route a role to a different OpenAI-compatible endpoint without changing business code)
 - `TARGET_RESUME_SCORE` (optional, default `80`)
 - `PROMPT_CHAR_LIMIT` (optional, default `0` = no truncation; set positive value to cap each large text block per prompt)
 - `JOB_FETCH_MODE` (optional, default `browser`; use `browser`, `auto`, or `requests`)
@@ -132,6 +140,26 @@ Environment variables (loaded from `.env`):
 - `JOB_FETCH_BROWSER_WAIT_MS` (optional, default `1500`; extra wait after page load for JS-rendered content)
 - `JOB_FETCH_BROWSER_HEADLESS` (optional, default `true`)
 - `REWRITE_LIFT_THRESHOLD` (optional, default `3`; minimum estimated score lift required before generating a tailored rewrite)
+
+## Model Routing
+
+The pipeline keeps model/provider choices inside `src/job_application_optimizer/llm/`. Business stages request a role such as `reasoning`, `writer`, `interview`, `cv`, or `metadata`; they do not bind to DeepSeek, Qwen, NVIDIA NIM, vLLM, SGLang, or any other model family.
+
+By default, every role falls back to `OPENAI_MODEL` through `OPENAI_API_KEY` / `OPENAI_BASE_URL`. You can selectively route judgment-heavy stages to a stronger thinking model while keeping generation on a faster writer model:
+
+```env
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-4o-mini
+
+LLM_REASONING_MODEL=your-reasoning-model
+LLM_REASONING_BASE_URL=https://your-openai-compatible-endpoint/v1
+LLM_REASONING_API_KEY=...
+LLM_REASONING_API_MODE=chat
+
+LLM_WRITER_MODEL=gpt-4o-mini
+```
+
+If all roles use the same compatible gateway, set only `OPENAI_BASE_URL` and `LLM_API_MODE=chat` when that gateway supports chat completions rather than the Responses API.
 
 ## Job Fetching
 

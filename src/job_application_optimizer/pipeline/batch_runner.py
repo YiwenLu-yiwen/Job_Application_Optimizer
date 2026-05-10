@@ -33,7 +33,7 @@ from job_application_optimizer.jobs.fetcher import fetch_job_page
 from job_application_optimizer.jobs.metadata import infer_job_meta_from_html, llm_extract_job_metadata
 from job_application_optimizer.jobs.parser import extract_clean_job_text, parse_urls_file
 from job_application_optimizer.jobs.requirements import llm_extract_job_requirements
-from job_application_optimizer.llm.client import require_llm_generate, require_openai_client
+from job_application_optimizer.llm.client import ModelRole, require_llm_router
 from job_application_optimizer.models import JobRecord
 from job_application_optimizer.resume.optimizer import optimize_resume_content
 from job_application_optimizer.resume.reader import read_resume_text
@@ -73,11 +73,10 @@ def run_batch(
     resume_text = read_resume_text(resume_path)
     log_event(logger, "resume_read", path=resume_path, chars=len(resume_text), duration=format_duration(perf_counter() - stage_started_at))
 
-    client = require_openai_client()
-    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    llm = require_llm_router()
     target_score = float(os.getenv("TARGET_RESUME_SCORE", "80"))
     stage_started_at = perf_counter()
-    cv_understanding = load_or_generate_cv_understanding(resume_path, client, model, cv_understanding_path)
+    cv_understanding = load_or_generate_cv_understanding(resume_path, llm, cv_understanding_path)
     log_event(
         logger,
         "cv_understanding_ready",
@@ -125,7 +124,7 @@ def run_batch(
             )
 
             stage_started_at = perf_counter()
-            job = llm_extract_job_metadata(client, model, job_text, job)
+            job = llm_extract_job_metadata(llm, job_text, job)
             log_event(
                 logger,
                 "stage_done",
@@ -138,7 +137,7 @@ def run_batch(
             )
 
             stage_started_at = perf_counter()
-            requirements = llm_extract_job_requirements(client, model, job, job_text)
+            requirements = llm_extract_job_requirements(llm, job, job_text)
             log_event(
                 logger,
                 "stage_done",
@@ -149,7 +148,7 @@ def run_batch(
             )
 
             stage_started_at = perf_counter()
-            evidence_map = llm_map_resume_evidence(client, model, job, resume_text, cv_understanding, requirements)
+            evidence_map = llm_map_resume_evidence(llm, job, resume_text, cv_understanding, requirements)
             log_event(
                 logger,
                 "stage_done",
@@ -160,8 +159,7 @@ def run_batch(
 
             stage_started_at = perf_counter()
             baseline_analysis = llm_ats_score(
-                client,
-                model,
+                llm,
                 job,
                 job_text,
                 resume_text,
@@ -211,8 +209,7 @@ def run_batch(
                 cv_understanding,
                 requirements,
                 evidence_map,
-                client,
-                model,
+                llm,
                 target_score,
             )
             log_event(
@@ -235,7 +232,7 @@ def run_batch(
                 evidence_map=evidence_map,
             )
             stage_started_at = perf_counter()
-            cover_letter = require_llm_generate(client, model, prompts["cover_letter"], "cover letter", temperature=0.4)
+            cover_letter = llm.generate(ModelRole.WRITER, prompts["cover_letter"], "cover letter", temperature=0.4)
             log_event(
                 logger,
                 "stage_done",
@@ -248,7 +245,7 @@ def run_batch(
             gap_diagnosis = ""
             if optimized_analysis["score"] < target_score:
                 stage_started_at = perf_counter()
-                gap_diagnosis = require_llm_generate(client, model, prompts["gap"], "gap diagnosis", temperature=0.2)
+                gap_diagnosis = llm.generate(ModelRole.REASONING, prompts["gap"], "gap diagnosis", temperature=0.2)
                 log_event(
                     logger,
                     "stage_done",
@@ -281,7 +278,7 @@ def run_batch(
             write_output(job_folder / "cover_letter.md", cover_letter)
             if include_interview_prep:
                 stage_started_at = perf_counter()
-                interview_pack = require_llm_generate(client, model, prompts["interview"], "interview pack", temperature=0.3)
+                interview_pack = llm.generate(ModelRole.INTERVIEW, prompts["interview"], "interview pack", temperature=0.3)
                 write_output(job_folder / "interview_prep.md", interview_pack)
                 log_event(
                     logger,

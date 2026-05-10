@@ -4,10 +4,8 @@ import json
 import textwrap
 from typing import Any
 
-from openai import OpenAI
-
 from job_application_optimizer.config import _prompt_text
-from job_application_optimizer.llm.client import require_llm_generate
+from job_application_optimizer.llm.client import LLMRouter, ModelRole
 from job_application_optimizer.llm.json_parser import parse_llm_json
 from job_application_optimizer.models import JobRecord
 
@@ -61,15 +59,14 @@ def build_evidence_mapping_prompt(
 
 
 def llm_map_resume_evidence(
-    client: OpenAI,
-    model: str,
+    llm: LLMRouter,
     job: JobRecord,
     resume_text: str,
     cv_understanding: str,
     requirements: dict[str, Any],
 ) -> dict[str, Any]:
     prompt = build_evidence_mapping_prompt(job, resume_text, cv_understanding, requirements)
-    payload = parse_llm_json(require_llm_generate(client, model, prompt, "resume evidence map", temperature=0.1))
+    payload = parse_llm_json(llm.generate(ModelRole.REASONING, prompt, "resume evidence map", temperature=0.1))
     requirement_map = payload.get("requirement_map")
     if not isinstance(requirement_map, list):
         payload["requirement_map"] = []

@@ -4,10 +4,8 @@ import json
 import textwrap
 from typing import Any
 
-from openai import OpenAI
-
 from job_application_optimizer.config import _prompt_text
-from job_application_optimizer.llm.client import require_llm_generate
+from job_application_optimizer.llm.client import LLMRouter, ModelRole
 from job_application_optimizer.llm.json_parser import normalize_llm_ats_result, parse_llm_json
 from job_application_optimizer.models import JobRecord
 
@@ -138,8 +136,7 @@ def build_llm_ats_score_prompt(
 
 
 def llm_ats_score(
-    client: OpenAI,
-    model: str,
+    llm: LLMRouter,
     job: JobRecord,
     job_text: str,
     resume_text: str,
@@ -147,7 +144,7 @@ def llm_ats_score(
     evidence_map: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     prompt = build_llm_ats_score_prompt(job, job_text, resume_text, requirements=requirements, evidence_map=evidence_map)
-    content = require_llm_generate(client, model, prompt, "LLM ATS score", temperature=0.1)
+    content = llm.generate(ModelRole.REASONING, prompt, "LLM ATS score", temperature=0.1)
     payload = parse_llm_json(content)
     return normalize_llm_ats_result(payload)
 
