@@ -132,7 +132,7 @@ def requirement_evidence_rows(requirements: dict[str, Any], evidence_map: dict[s
         for item in evidence_items
         if isinstance(item, dict) and str(item.get("id", "")).strip()
     }
-    coverage_score = {"strong": 100, "partial": 65, "adjacent": 40, "missing": 0}
+    coverage_score = {"strong": 100, "weakly_present": 80, "partial": 65, "adjacent": 40, "missing": 0}
     priority_rank_by_index = requirement_priority_ranks(requirements, requirement_items)
 
     rows: list[dict[str, Any]] = []
@@ -144,6 +144,8 @@ def requirement_evidence_rows(requirements: dict[str, Any], evidence_map: dict[s
         coverage = str(evidence.get("coverage") or "missing").strip()
         if coverage == "strong":
             action = "Feature prominently; evidence is strong."
+        elif coverage == "weakly_present":
+            action = "Feature, but strengthen wording and proof density."
         elif coverage == "partial":
             action = "Strengthen wording with supported evidence and JD terminology."
         elif coverage == "adjacent":

@@ -14,6 +14,7 @@ dependencies = [
   "beautifulsoup4>=4.12.0",
   "openai>=1.30.0",
   "playwright>=1.43.0",
+  "pydantic>=2.7.0,<3",
   "pypdf>=4.2.0",
   "python-docx>=1.1.0",
   "python-dotenv>=1.0.1",
@@ -25,8 +26,8 @@ dependencies = [
 [project.scripts]
 job-application-optimizer = "job_application_optimizer.cli:main"
 generate-cv-understanding = "job_application_optimizer.resume.understanding:main"
+generate-capability-inventory = "job_application_optimizer.resume.capability_inventory:main"
 generate-interview-prep = "job_application_optimizer.generation.interview_prep:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-

@@ -111,7 +111,7 @@ def endpoint_generate(
     )
     client = client or endpoint.client()
     if endpoint.api_mode == "chat":
-        response = client.chat.completions.create(
+        chat_response = client.chat.completions.create(
             model=endpoint.model,
             messages=[
                 {"role": "system", "content": system_instruction},
@@ -119,14 +119,14 @@ def endpoint_generate(
             ],
             temperature=temperature,
         )
-        return (response.choices[0].message.content or "").strip()
+        return (chat_response.choices[0].message.content or "").strip()
 
     combined_input = f"{system_instruction}\n\n{prompt}"
-    response = client.responses.create(
+    responses_response = client.responses.create(
         model=endpoint.model,
         input=combined_input,
     )
-    return (response.output_text or "").strip()
+    return (responses_response.output_text or "").strip()
 
 
 def safe_endpoint_generate(

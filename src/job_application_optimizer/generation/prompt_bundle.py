@@ -16,6 +16,7 @@ def build_prompt_bundle(
     cv_understanding: str,
     requirements: dict[str, Any] | None = None,
     evidence_map: dict[str, Any] | None = None,
+    capability_inventory: str = "",
 ) -> dict[str, str]:
     missing = ", ".join(k for k, _ in analysis["missing_keywords"][:20])
     matched = ", ".join(k for k, _ in analysis["matched_keywords"][:20])
@@ -29,6 +30,7 @@ def build_prompt_bundle(
     job_excerpt = _prompt_text(job_text)
     resume_excerpt = _prompt_text(resume_text)
     cv_understanding_excerpt = _prompt_text(cv_understanding)
+    capability_inventory_excerpt = _prompt_text(capability_inventory) if capability_inventory else "No verified capability inventory provided."
 
     resume_prompt = textwrap.dedent(
         f"""
@@ -43,6 +45,9 @@ def build_prompt_bundle(
 
         CANDIDATE DEEP UNDERSTANDING (Use this to make intelligent enhancements):
         {cv_understanding_excerpt}
+
+        VERIFIED CAPABILITY INVENTORY:
+        {capability_inventory_excerpt}
 
         EXTRACTED JOB REQUIREMENTS:
         {requirements_json}
@@ -69,9 +74,10 @@ def build_prompt_bundle(
         2) Reorder bullets to emphasize the most relevant and highest-signal experience first.
         3) Replace generic phrasing with specific, JD-aligned terminology where applicable.
            Use natural keyword replacement: prefer the JD's phrasing when it accurately describes the same work, but keep the sentence fluent and credible.
-           Good: use a JD term when the resume supports the same capability, and tie it to a specific project, method, or outcome.
+           Good: use a JD term when the resume or verified capability inventory supports the same capability, and tie it to a specific project, method, or outcome.
            Bad: append a broad list of loosely related JD keywords without evidence or sentence-level purpose.
-        4) You may translate demonstrated experience into equivalent industry terminology, but do not introduce a skill, tool, framework, security practice, or architecture pattern unless the original resume explicitly supports it.
+        4) You may translate demonstrated experience into equivalent industry terminology, but do not introduce a skill, tool, framework, security practice, or architecture pattern unless the original resume or verified capability inventory explicitly supports it.
+           If using capability inventory, use only entries with verification_status: verified. Ignore needs_review and rejected entries.
            If a JD keyword is adjacent but not proven, omit it from the resume and leave it for gap diagnosis instead.
         5) Expand bullet points only with context that clarifies actual experience. Do not inflate scope, seniority, team size, domain, or ownership beyond the provided facts.
         6) DO NOT fabricate projects, roles, companies, quantified metrics, tools, leadership scope, security practices, or domain expertise.
@@ -130,6 +136,9 @@ def build_prompt_bundle(
 
         Resume:
           {resume_excerpt}
+
+        Verified capability inventory:
+          {capability_inventory_excerpt}
         """
     ).strip()
 
@@ -181,6 +190,9 @@ def build_prompt_bundle(
 
         Candidate deep understanding:
           {cv_understanding_excerpt}
+
+        Verified capability inventory:
+          {capability_inventory_excerpt}
         """
     ).strip()
 
@@ -213,6 +225,9 @@ def build_prompt_bundle(
 
         Resume:
         {resume_excerpt}
+
+        Verified capability inventory:
+        {capability_inventory_excerpt}
         """
     ).strip()
 

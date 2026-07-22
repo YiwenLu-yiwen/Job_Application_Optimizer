@@ -17,3 +17,4 @@ data/cv_deep_understanding.md
 data/urls.txt
 logs/
 *.log
+data/capability_inventory*.yaml

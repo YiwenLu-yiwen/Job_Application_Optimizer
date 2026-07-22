@@ -22,6 +22,7 @@ For each job URL from `urls.txt`, the pipeline will:
 8. Write per-job CSV reports plus run-level `batch_summary.json`, `ranked_jobs.csv`, and completed reports. Reports are updated after each processed job, so progress is preserved if a run is interrupted.
 
 The batch pipeline uses a CV-understanding cache (`cv_deep_understanding.md`) to improve wording refinement and JD-term replacement without fabricating experience.
+Resume-derived caches include a SHA-256 marker for the source resume. Changing the resume automatically regenerates CV understanding and invalidates a stale capability inventory. A stale verified inventory is preserved, while a fresh draft is generated for review. Legacy cache files without a marker are regenerated once.
 
 ## Workflow Overflow
 
@@ -142,6 +143,8 @@ LLM_WRITER_MODEL=gpt-4o-mini
 
 If all roles use the same compatible gateway, set `LLM_BASE_URL` and `LLM_API_MODE=chat` when that gateway supports chat completions rather than the Responses API.
 
+JSON-producing stages are validated against strict typed schemas. When a model returns malformed JSON, missing fields, unexpected fields, or invalid values, the pipeline sends the validation errors back for correction and makes up to three total attempts before failing that stage.
+
 ## Job Fetching
 
 The fetcher uses Playwright headless Chromium by default so JavaScript-rendered job descriptions are captured after the page loads. If you need a faster non-browser path, set `JOB_FETCH_MODE=auto` or `JOB_FETCH_MODE=requests`.
@@ -212,11 +215,17 @@ make cv-understanding RESUME=data/resume.txt
 
 ### 3. Run batch optimization
 
+The batch run also checks for `capability_inventory.yaml` by default. If the verified file is missing and
+`capability_inventory.draft.yaml` is also missing, it generates a draft from `cv_deep_understanding.md` for manual review.
+Verified inventories are used by evidence mapping, ATS evaluation, and resume generation. Draft inventories are not used
+as resume evidence until you review and save them as the non-draft YAML.
+
 ```bash
 PYTHONPATH=src python -m job_application_optimizer.cli \
   --urls data/urls.txt \
   --resume data/resume.pdf \
   --cv-understanding data/cv_deep_understanding.md \
+  --capability-inventory data/capability_inventory.yaml \
   --out outputs \
   --completed-csv completed_job.csv \
   --completed-all-csv completed_jobs_all.csv
@@ -233,11 +242,15 @@ After `pip install -e .`, you can also use the console commands:
 
 ```bash
 generate-cv-understanding data/resume.pdf -o data/cv_deep_understanding.md
+generate-capability-inventory data/resume.pdf \
+  --cv-understanding data/cv_deep_understanding.md \
+  --output data/capability_inventory.draft.yaml
 
 job-application-optimizer \
   --urls data/urls.txt \
   --resume data/resume.pdf \
   --cv-understanding data/cv_deep_understanding.md \
+  --capability-inventory data/capability_inventory.yaml \
   --out outputs
 ```
 
@@ -384,7 +397,7 @@ Use `requirements_evidence_matrix.csv` when you want to understand why a score i
 
 - `priority_rank`: inferred requirement priority. The script first uses LLM-extracted screening priorities when they can be matched, then falls back to `importance` and JD order.
 - `importance`: whether the JD requirement is must-have, important, or nice-to-have.
-- `coverage`: whether your resume evidence is strong, partial, adjacent, or missing.
+- `coverage`: whether your resume evidence is strong, weakly present, partial, adjacent, or missing.
 - `resume_evidence`: the concrete resume-backed proof available for that requirement.
 - `missing_evidence`: the real gap that should not be fabricated.
 - `safe_resume_terms`: JD-aligned wording that can be used truthfully.

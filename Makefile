@@ -1,8 +1,10 @@
-.PHONY: install install-browser run cv-understanding interview interview-all run-interview run-interview-all
+.PHONY: install install-browser run cv-understanding capability-inventory interview interview-all run-interview run-interview-all
 
 RESUME ?= data/resume.pdf
 URLS ?= data/urls.txt
 CV_UNDERSTANDING ?= data/cv_deep_understanding.md
+CAPABILITY_INVENTORY ?= data/capability_inventory.yaml
+CAPABILITY_INVENTORY_DRAFT ?= data/capability_inventory.draft.yaml
 OUT ?= outputs
 
 install:
@@ -17,12 +19,19 @@ run:
 		--urls $(URLS) \
 		--resume $(RESUME) \
 		--cv-understanding $(CV_UNDERSTANDING) \
+		--capability-inventory $(CAPABILITY_INVENTORY) \
 		--out $(OUT)
 
 cv-understanding:
 	PYTHONPATH=src python -m job_application_optimizer.resume.understanding \
 		$(RESUME) \
 		-o $(CV_UNDERSTANDING)
+
+capability-inventory:
+	PYTHONPATH=src python -m job_application_optimizer.resume.capability_inventory \
+		$(RESUME) \
+		--cv-understanding $(CV_UNDERSTANDING) \
+		--output $(CAPABILITY_INVENTORY_DRAFT)
 
 interview:
 	@if [ -z "$(JOB_FOLDER)" ]; then echo "Usage: make interview JOB_FOLDER=outputs/YYYY-MM-DD/Company_Role"; exit 1; fi

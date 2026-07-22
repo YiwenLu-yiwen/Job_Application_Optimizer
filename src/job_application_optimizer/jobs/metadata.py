@@ -6,7 +6,8 @@ from bs4 import BeautifulSoup
 
 from job_application_optimizer.config import _prompt_text
 from job_application_optimizer.llm.client import LLMRouter, ModelRole
-from job_application_optimizer.llm.json_parser import parse_llm_json
+from job_application_optimizer.llm.schemas import JobMetadataResult
+from job_application_optimizer.llm.structured import generate_structured
 from job_application_optimizer.models import JobRecord
 
 
@@ -59,13 +60,20 @@ def build_job_metadata_prompt(job_text: str, url: str, fallback: JobRecord) -> s
 def llm_extract_job_metadata(llm: LLMRouter, job_text: str, job: JobRecord) -> JobRecord:
     prompt = build_job_metadata_prompt(job_text, job.url, job)
     try:
-        payload = parse_llm_json(llm.generate(ModelRole.METADATA, prompt, "job metadata", temperature=0.0))
+        payload = generate_structured(
+            llm,
+            ModelRole.METADATA,
+            prompt,
+            "job metadata",
+            JobMetadataResult,
+            temperature=0.0,
+        )
     except Exception:
         return job
 
-    company = str(payload.get("company") or job.company or "").strip()
-    role = str(payload.get("role") or job.role or "").strip()
-    location = str(payload.get("location") or job.location or "").strip()
+    company = payload.company or job.company
+    role = payload.role or job.role
+    location = payload.location or job.location
 
     return JobRecord(
         job_id=job.job_id,

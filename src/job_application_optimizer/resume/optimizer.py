@@ -120,6 +120,7 @@ def estimate_rewrite_opportunity(
 ) -> dict[str, Any]:
     original_score = _analysis_score(baseline_analysis)
     supported = _coverage_items(evidence_map, {"strong"})
+    weakly_present = _coverage_items(evidence_map, {"weakly_present"})
     partial = _coverage_items(evidence_map, {"partial"})
     adjacent = _coverage_items(evidence_map, {"adjacent"})
     missing = _coverage_items(evidence_map, {"missing"})
@@ -136,6 +137,7 @@ def estimate_rewrite_opportunity(
         estimated_lift += min(len(safe_improvements), 4) * 0.75
     if isinstance(weak_bullets, list):
         estimated_lift += min(len(weak_bullets), 4) * 0.5
+    estimated_lift += min(len(weakly_present), 5) * 0.5
     estimated_lift += min(len(partial), 5) * 0.8
     estimated_lift += min(len(adjacent), 3) * 0.25
     estimated_lift -= min(len(missing), 5) * 0.4
@@ -160,6 +162,7 @@ def estimate_rewrite_opportunity(
         "reason": reason,
         "gap_classification": {
             "supported_by_resume_evidence": _gap_summary_items(supported),
+            "weakly_present_strengthen": _gap_summary_items(weakly_present),
             "partially_supported_can_reframe": _gap_summary_items(partial),
             "adjacent_only_soft_positioning": _gap_summary_items(adjacent),
             "not_supported_cannot_add": _gap_summary_items(missing),
@@ -216,6 +219,7 @@ def build_resume_edit_log(
         if isinstance(gap_classification, dict):
             labels = [
                 ("Supported by resume evidence", "supported_by_resume_evidence"),
+                ("Weakly present; should strengthen proof density", "weakly_present_strengthen"),
                 ("Partially supported; can soften/reframe", "partially_supported_can_reframe"),
                 ("Adjacent only; soft positioning", "adjacent_only_soft_positioning"),
                 ("Not supported; cannot add", "not_supported_cannot_add"),
@@ -299,6 +303,7 @@ def build_section_editor_prompt(
     requirements: dict[str, Any],
     evidence_map: dict[str, Any],
     attempt_number: int,
+    capability_inventory: str = "",
 ) -> str:
     missing = ", ".join(k for k, _ in optimized_analysis["missing_keywords"][:20]) or "none"
     safe_improvements = "\n".join(f"- {item}" for item in optimized_analysis.get("resume_safe_improvements", [])[:10]) or "- None provided"
@@ -312,6 +317,7 @@ def build_section_editor_prompt(
     resume_excerpt = _prompt_text(resume_text)
     job_excerpt = _prompt_text(job_text)
     current_resume_excerpt = _prompt_text(current_resume)
+    capability_inventory_excerpt = _prompt_text(capability_inventory) if capability_inventory else "No verified capability inventory provided."
     return textwrap.dedent(
         f"""
         You are the Editor. Apply a targeted local edit to the current tailored resume for {job.role} at {job.company}.
@@ -329,7 +335,8 @@ def build_section_editor_prompt(
         2) Revise only weak sections/bullets listed below. Do not restructure the whole CV.
         3) If factual risks are listed, remove, soften, or verify those exact claims using only source evidence.
         4) Use resume-safe improvements and missing keyword guidance only where supported by original facts and evidence map.
-        5) Translate demonstrated experience into equivalent JD terminology, but do not introduce a skill, tool, framework, security practice, or architecture pattern unless the original resume explicitly supports it.
+        5) Translate demonstrated experience into equivalent JD terminology, but do not introduce a skill, tool, framework, security practice, or architecture pattern unless the original resume or verified capability inventory explicitly supports it.
+           If using capability inventory, use only entries with verification_status: verified. Ignore needs_review and rejected entries.
            Keyword replacement must feel organic inside the bullet. Do not append awkward keyword lists or repeat the same JD term unnaturally.
         6) If a JD keyword is adjacent but not proven, omit it from the resume.
         7) Keep the existing resume format and section order unless the Evaluator specifically flags a section-order issue.
@@ -377,6 +384,9 @@ def build_section_editor_prompt(
         Resume evidence map:
         {evidence_map_json}
 
+        Verified capability inventory:
+        {capability_inventory_excerpt}
+
         Original resume facts:
         {resume_excerpt}
 
@@ -399,6 +409,7 @@ def optimize_resume_content(
     evidence_map: dict[str, Any],
     llm: LLMRouter,
     target_score: float,
+    capability_inventory: str = "",
     max_retries: int = 3,
 ) -> tuple[str, dict[str, Any], str, list[dict[str, Any]], str, str]:
     generation_mode = "llm"
@@ -433,6 +444,7 @@ def optimize_resume_content(
         cv_understanding,
         requirements=requirements,
         evidence_map=evidence_map,
+        capability_inventory=capability_inventory,
     )
     tailored_resume = llm.generate(ModelRole.WRITER, prompts["resume"], "tailored resume")
 
@@ -443,6 +455,7 @@ def optimize_resume_content(
         tailored_resume,
         requirements=requirements,
         evidence_map=evidence_map,
+        capability_inventory=capability_inventory,
     )
     evaluation_history = [
         {
@@ -492,6 +505,7 @@ def optimize_resume_content(
             requirements,
             evidence_map,
             retries + 1,
+            capability_inventory=capability_inventory,
         )
         edited_resume = llm.generate(ModelRole.WRITER, editor_prompt, "section editor retry")
 
@@ -503,6 +517,7 @@ def optimize_resume_content(
             tailored_resume,
             requirements=requirements,
             evidence_map=evidence_map,
+            capability_inventory=capability_inventory,
         )
         evaluation_history.append(
             {

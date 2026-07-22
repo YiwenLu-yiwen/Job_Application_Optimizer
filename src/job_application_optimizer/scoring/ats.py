@@ -6,7 +6,9 @@ from typing import Any
 
 from job_application_optimizer.config import _prompt_text
 from job_application_optimizer.llm.client import LLMRouter, ModelRole
-from job_application_optimizer.llm.json_parser import normalize_llm_ats_result, parse_llm_json
+from job_application_optimizer.llm.json_parser import normalize_llm_ats_result
+from job_application_optimizer.llm.schemas import ATSScoreResult
+from job_application_optimizer.llm.structured import generate_structured
 from job_application_optimizer.models import JobRecord
 
 
@@ -16,9 +18,11 @@ def build_llm_ats_score_prompt(
     resume_text: str,
     requirements: dict[str, Any] | None = None,
     evidence_map: dict[str, Any] | None = None,
+    capability_inventory: str = "",
 ) -> str:
     job_excerpt = _prompt_text(job_text)
     resume_excerpt = _prompt_text(resume_text)
+    capability_inventory_excerpt = _prompt_text(capability_inventory) if capability_inventory else "No verified capability inventory provided."
     requirements_json = json.dumps(requirements or {}, ensure_ascii=False, indent=2)
     evidence_map_json = json.dumps(evidence_map or {}, ensure_ascii=False, indent=2)
     return textwrap.dedent(
@@ -42,11 +46,16 @@ def build_llm_ats_score_prompt(
         Resume evidence mapped to requirements:
         {evidence_map_json}
 
+        Verified capability inventory:
+        {capability_inventory_excerpt}
+
         Scoring rubric:
         - 0-100 overall score.
         - Evaluate semantic fit, not only exact keyword overlap.
         - Ignore employer branding, benefits, DEI language, legal boilerplate, company slogans, and repeated company names unless they describe real role requirements.
         - Reward exact JD terminology only when it is supported by evidence in the resume.
+        - If a verified capability inventory is provided, treat only verification_status: verified entries as supporting evidence.
+        - Do not treat needs_review or rejected inventory entries as supporting evidence.
         - Penalize unsupported claims, missing must-have tools, missing domain requirements, and lack of production evidence.
         - Distinguish missing wording from missing evidence.
         - Do not require every bonus skill if core evidence is strong.
@@ -142,11 +151,25 @@ def llm_ats_score(
     resume_text: str,
     requirements: dict[str, Any] | None = None,
     evidence_map: dict[str, Any] | None = None,
+    capability_inventory: str = "",
 ) -> dict[str, Any]:
-    prompt = build_llm_ats_score_prompt(job, job_text, resume_text, requirements=requirements, evidence_map=evidence_map)
-    content = llm.generate(ModelRole.REASONING, prompt, "LLM ATS score", temperature=0.1)
-    payload = parse_llm_json(content)
-    return normalize_llm_ats_result(payload)
+    prompt = build_llm_ats_score_prompt(
+        job,
+        job_text,
+        resume_text,
+        requirements=requirements,
+        evidence_map=evidence_map,
+        capability_inventory=capability_inventory,
+    )
+    result = generate_structured(
+        llm,
+        ModelRole.REASONING,
+        prompt,
+        "LLM ATS score",
+        ATSScoreResult,
+        temperature=0.1,
+    )
+    return normalize_llm_ats_result(result.model_dump())
 
 
 def has_factual_risk(analysis: dict[str, Any]) -> bool:

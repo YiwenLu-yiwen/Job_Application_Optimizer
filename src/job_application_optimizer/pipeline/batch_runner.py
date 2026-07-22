@@ -35,6 +35,7 @@ from job_application_optimizer.jobs.parser import extract_clean_job_text, parse_
 from job_application_optimizer.jobs.requirements import llm_extract_job_requirements
 from job_application_optimizer.llm.client import ModelRole, require_llm_router
 from job_application_optimizer.models import JobRecord
+from job_application_optimizer.resume.capability_inventory import load_or_generate_capability_inventory
 from job_application_optimizer.resume.optimizer import optimize_resume_content
 from job_application_optimizer.resume.reader import read_resume_text
 from job_application_optimizer.resume.understanding import load_or_generate_cv_understanding
@@ -52,6 +53,7 @@ def run_batch(
     completed_csv_path: Path,
     completed_all_csv_path: Path,
     cv_understanding_path: Path,
+    capability_inventory_path: Path,
     run_date: str,
     include_interview_prep: bool = False,
     logger: logging.Logger | None = None,
@@ -84,6 +86,25 @@ def run_batch(
         chars=len(cv_understanding),
         duration=format_duration(perf_counter() - stage_started_at),
     )
+    stage_started_at = perf_counter()
+    capability_inventory = load_or_generate_capability_inventory(
+        resume_path,
+        cv_understanding,
+        capability_inventory_path,
+        llm,
+    )
+    log_event(
+        logger,
+        "capability_inventory_ready",
+        path=capability_inventory.path,
+        draft_path=capability_inventory.draft_path,
+        usable=capability_inventory.usable,
+        generated_draft=capability_inventory.generated_draft,
+        message=capability_inventory.message,
+        duration=format_duration(perf_counter() - stage_started_at),
+    )
+    print(capability_inventory.message, flush=True)
+    verified_capability_inventory = capability_inventory.content if capability_inventory.usable else ""
 
     summary_rows = []
     completed_rows = []
@@ -148,7 +169,14 @@ def run_batch(
             )
 
             stage_started_at = perf_counter()
-            evidence_map = llm_map_resume_evidence(llm, job, resume_text, cv_understanding, requirements)
+            evidence_map = llm_map_resume_evidence(
+                llm,
+                job,
+                resume_text,
+                cv_understanding,
+                requirements,
+                capability_inventory=verified_capability_inventory,
+            )
             log_event(
                 logger,
                 "stage_done",
@@ -165,6 +193,7 @@ def run_batch(
                 resume_text,
                 requirements=requirements,
                 evidence_map=evidence_map,
+                capability_inventory=verified_capability_inventory,
             )
             log_event(
                 logger,
@@ -211,6 +240,7 @@ def run_batch(
                 evidence_map,
                 llm,
                 target_score,
+                capability_inventory=verified_capability_inventory,
             )
             log_event(
                 logger,
@@ -230,6 +260,7 @@ def run_batch(
                 cv_understanding,
                 requirements=requirements,
                 evidence_map=evidence_map,
+                capability_inventory=verified_capability_inventory,
             )
             stage_started_at = perf_counter()
             cover_letter = llm.generate(ModelRole.WRITER, prompts["cover_letter"], "cover letter", temperature=0.4)
@@ -442,6 +473,11 @@ def main() -> None:
         help="Path to CV deep-understanding cache file",
     )
     parser.add_argument(
+        "--capability-inventory",
+        default="capability_inventory.yaml",
+        help="Path to verified capability inventory YAML. If missing, a .draft.yaml file is generated for review but not used.",
+    )
+    parser.add_argument(
         "--interview-prep",
         action="store_true",
         help="Also generate interview_prep.md for each job. Disabled by default to reduce cost and runtime.",
@@ -458,6 +494,7 @@ def main() -> None:
     completed_csv_path = completed_csv_base.parent / completed_csv_name
     completed_all_csv_path = Path(args.completed_all_csv).resolve()
     cv_understanding_path = Path(args.cv_understanding).resolve()
+    capability_inventory_path = Path(args.capability_inventory).resolve()
 
     urls_file = Path(args.urls).resolve()
     if not urls_file.exists():
@@ -478,6 +515,7 @@ def main() -> None:
         completed_csv_path,
         completed_all_csv_path,
         cv_understanding_path,
+        capability_inventory_path,
         run_date,
         include_interview_prep=args.interview_prep,
         logger=logger,

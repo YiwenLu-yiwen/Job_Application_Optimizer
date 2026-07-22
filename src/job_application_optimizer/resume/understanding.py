@@ -9,6 +9,7 @@ from docx import Document
 from pypdf import PdfReader
 
 from job_application_optimizer.llm.client import LLMRouter, ModelRole, require_llm_router
+from job_application_optimizer.resume.cache import read_fresh_cache, resume_sha256, write_cache
 
 load_dotenv()
 
@@ -21,7 +22,7 @@ def read_resume(resume_path: Path) -> str:
         reader = PdfReader(resume_path)
         return "\n".join([page.extract_text() for page in reader.pages])
     elif suffix == ".docx":
-        doc = Document(resume_path)
+        doc = Document(str(resume_path))
         return "\n".join([p.text for p in doc.paragraphs])
     elif suffix in [".txt", ".md"]:
         return resume_path.read_text(encoding="utf-8")
@@ -140,13 +141,14 @@ CRITICAL REQUIREMENTS:
 
 def load_or_generate_cv_understanding(resume_path: Path, llm: LLMRouter, cache_path: Path) -> str:
     cache_path = cache_path.resolve()
-    if cache_path.exists():
-        return cache_path.read_text(encoding="utf-8")
+    resume_hash = resume_sha256(resume_path)
+    cached = read_fresh_cache(cache_path, resume_hash)
+    if cached is not None:
+        return cached
 
     resume_text = read_resume(resume_path)
     analysis = generate_cv_understanding(resume_text, llm)
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(analysis, encoding="utf-8")
+    write_cache(cache_path, analysis, resume_hash, "markdown")
     return analysis
 
 
@@ -175,7 +177,7 @@ def main():
     
     # Save to file
     output_path = Path(args.output or "cv_deep_understanding.md")
-    output_path.write_text(analysis, encoding="utf-8")
+    write_cache(output_path, analysis, resume_sha256(resume_path), "markdown")
     print(f"✓ Saved to: {output_path}")
     
     # Optional: save JSON summary

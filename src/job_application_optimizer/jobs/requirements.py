@@ -5,7 +5,8 @@ from typing import Any
 
 from job_application_optimizer.config import _prompt_text
 from job_application_optimizer.llm.client import LLMRouter, ModelRole
-from job_application_optimizer.llm.json_parser import parse_llm_json
+from job_application_optimizer.llm.schemas import JobRequirementsResult
+from job_application_optimizer.llm.structured import generate_structured
 from job_application_optimizer.models import JobRecord
 
 
@@ -43,11 +44,15 @@ def build_requirement_extraction_prompt(job: JobRecord, job_text: str) -> str:
 
 def llm_extract_job_requirements(llm: LLMRouter, job: JobRecord, job_text: str) -> dict[str, Any]:
     prompt = build_requirement_extraction_prompt(job, job_text)
-    payload = parse_llm_json(llm.generate(ModelRole.REASONING, prompt, "job requirements", temperature=0.1))
-    requirements = payload.get("requirements")
-    if not isinstance(requirements, list):
-        payload["requirements"] = []
-    return payload
+    result = generate_structured(
+        llm,
+        ModelRole.REASONING,
+        prompt,
+        "job requirements",
+        JobRequirementsResult,
+        temperature=0.1,
+    )
+    return result.model_dump()
 
 
 __all__ = ["build_requirement_extraction_prompt", "llm_extract_job_requirements"]

@@ -6,8 +6,11 @@ from typing import Any
 
 from job_application_optimizer.config import _prompt_text
 from job_application_optimizer.llm.client import LLMRouter, ModelRole
-from job_application_optimizer.llm.json_parser import parse_llm_json
+from job_application_optimizer.llm.schemas import EvidenceMappingResult
+from job_application_optimizer.llm.structured import generate_structured
 from job_application_optimizer.models import JobRecord
+
+VALID_COVERAGE_VALUES = {"strong", "weakly_present", "partial", "adjacent", "missing"}
 
 
 def build_evidence_mapping_prompt(
@@ -15,15 +18,19 @@ def build_evidence_mapping_prompt(
     resume_text: str,
     cv_understanding: str,
     requirements: dict[str, Any],
+    capability_inventory: str = "",
 ) -> str:
     resume_excerpt = _prompt_text(resume_text)
     cv_understanding_excerpt = _prompt_text(cv_understanding)
+    capability_inventory_excerpt = _prompt_text(capability_inventory) if capability_inventory else "No verified capability inventory provided."
     requirements_json = json.dumps(requirements, ensure_ascii=False, indent=2)
     return textwrap.dedent(
         f"""
         Map the candidate's resume evidence to each extracted job requirement.
         Do not write or rewrite resume content. Do not invent evidence.
-        For every requirement, decide whether the resume evidence is strong, partial, adjacent, or missing.
+        For every requirement, decide whether the resume evidence is strong, weakly_present, partial, adjacent, or missing.
+        If a verified capability inventory is provided, use only entries with verification_status: verified.
+        Ignore needs_review and rejected inventory entries as resume evidence.
 
         Target role: {job.role}
         Company: {job.company}
@@ -37,12 +44,15 @@ def build_evidence_mapping_prompt(
         CV deep understanding:
         {cv_understanding_excerpt}
 
+        Verified capability inventory:
+        {capability_inventory_excerpt}
+
         Return JSON only:
         {{
           "requirement_map": [
             {{
               "id": "R1",
-              "coverage": "strong | partial | adjacent | missing",
+              "coverage": "strong | weakly_present | partial | adjacent | missing",
               "resume_evidence": ["specific resume-backed evidence or metric"],
               "safe_resume_terms": ["JD-aligned terms that can be used truthfully"],
               "missing_evidence": ["what is not supported and should not be claimed"],
@@ -64,13 +74,24 @@ def llm_map_resume_evidence(
     resume_text: str,
     cv_understanding: str,
     requirements: dict[str, Any],
+    capability_inventory: str = "",
 ) -> dict[str, Any]:
-    prompt = build_evidence_mapping_prompt(job, resume_text, cv_understanding, requirements)
-    payload = parse_llm_json(llm.generate(ModelRole.REASONING, prompt, "resume evidence map", temperature=0.1))
-    requirement_map = payload.get("requirement_map")
-    if not isinstance(requirement_map, list):
-        payload["requirement_map"] = []
-    return payload
+    prompt = build_evidence_mapping_prompt(
+        job,
+        resume_text,
+        cv_understanding,
+        requirements,
+        capability_inventory=capability_inventory,
+    )
+    result = generate_structured(
+        llm,
+        ModelRole.REASONING,
+        prompt,
+        "resume evidence map",
+        EvidenceMappingResult,
+        temperature=0.1,
+    )
+    return result.model_dump()
 
 
-__all__ = ["build_evidence_mapping_prompt", "llm_map_resume_evidence"]
+__all__ = ["VALID_COVERAGE_VALUES", "build_evidence_mapping_prompt", "llm_map_resume_evidence"]

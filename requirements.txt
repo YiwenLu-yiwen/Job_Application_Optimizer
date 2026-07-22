@@ -6,3 +6,4 @@ pypdf>=4.2.0
 openai>=1.30.0
 python-dotenv>=1.0.1
 playwright>=1.43.0
+pydantic>=2.7.0,<3
